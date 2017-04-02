@@ -126,6 +126,6 @@ Using the boosting model we just tuned, we get the second set of the prediction 
 predict(fitGbm,preTest)
 ```
 
-###Conclusion
+### Conclusion
 
 Using random forest and boosting algorith from the caret package and tuned the key parameters to our data, we could see that the two models could both achieve high accuracy and their predictions on the test data set we got from random forest and boosting models are the same. This demonstrated the possibility of using wearable devices data to tell if a movement is performed in the correct way or not which could have important applications in developing smart devices in the real world.
