@@ -1,0 +1,131 @@
+---
+title: "Use Wearable Devices Data to Predict Activity Quality"
+author: "Xing Liu"
+date: "4/2/2017"
+output: html_document
+---
+## Background
+Wearable devices are becoming integrated into modern life. 
+Among their various features, most devices record the physcial activities of 
+their owner and provide wellness diagnosis based on collected data. 
+The data analyzed in this project comes from on-body movement measurements of people lifting weights (http://groupware.les.inf.puc-rio.br/har). Participants are asked to perform weight-lifting with the correct execution and four other ways that correspond to four different common mistakes. The goal is to predict which out of the five categories did one lift weight based on measurements from accelerometers attached to the belt, forearm, arm and dumbell.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Import and Clean Data
+
+```{r load packages, echo = TRUE, eval = TRUE, message = FALSE}
+library(caret)
+library(randomForest)
+library(AppliedPredictiveModeling)
+```
+After loading necessary libraries to be used in training models, download the training and testing data from their URLs.
+```{r import data, echo = TRUE, eval = TRUE}
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+preTrain <- read.csv(url(trainingURL),na.strings = c("NA", " ", "summ#DIV/0!", ""))
+preTest <- read.csv(url(testingURL),na.strings = c("NA", " ", "summ#DIV/0!", ""))
+#str(preTrain[,1:10])
+```
+Remove the columns that don't have measurements. And remove the first 7 columns that don't contain direct measurements.
+```{r cleaning data, echo = TRUE, eval = TRUE}
+preTrain <- preTrain[,colSums(is.na(preTrain)) == 0]
+test <- preTest[, colSums(is.na(preTest)) == 0]
+preTrain <- preTrain[,-c(1:7)]
+test <- test[,-c(1:7)]
+dim(preTrain)
+dim(test)
+```
+It is a classification problem with 5 outcomes. There are 46 numerical input features that decribe the properties of movements.
+
+Here is a plot showing how the roll, pitch, yaw features of arm, belt, dumbbell and forarm are related to the five different outcomes (A, B, C, D, E).
+
+```{r visualizations, echo = TRUE, eval = TRUE}
+transparentTheme(trans = .3)
+featurePlot(x = preTrain[,c(1,2,3,14,15,16,27,28,29,40,41,42)], y = preTrain$classe, 
+            auto.key = list(columns = 2))
+```
+
+## Split Training Data into Training and Validation
+The training set has 19,622 observations, and the testing set has 20 cases to predict. In order to find out the out of sample error of any model we are going to build, set aside 25 % of the training set into the validation set and use only 75 % to build prediction models. Here we choose to have a stratified random splitting based on the outcome variable 'classe'. 
+```{r splitting, echo = TRUE, eval = TRUE}
+set.seed(1124)
+inTrain <- createDataPartition(preTrain$classe, p = 0.75, list = FALSE)
+train <- preTrain[inTrain,]
+valid <- preTrain[-inTrain,]
+control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
+```
+
+##Model Training and Tuning
+
+Since predicting 5 kinds of outcomes based on 46 measurements from accelerometers attached to 3 different parts of the body and the weight being lifted is a nonlinear problem, we are going to use Random Forest and Boosting algorithms. 
+
+### Random Forest
+Random Forest algorithm builds an ensemble of decision trees, each of which uses a randomly sampled subset of observations and a randomly sampled subset of variables. Given a new set of observations, it averages over the predictions from all the decision trees to reach a final conclusion. According to R document, mtry is the number of variables randomly sampled as candidates at each split and ntree is the number of trees to grow. Since it's often the case that the higher the value of 'ntree' the more accurate the model is, only the parameters 'mtry' is tuned to find out the best value for the data in this case.  
+Within the training data set, we use the caret train function with random forest ('rf') method and choose a resampling scheme of 3 separate 5-fold cross-validations. 
+```{r random forest, echo = TRUE, eval = TRUE}
+tune <- expand.grid(.mtry=c(2,7,12))
+fitRf <- train(classe ~ ., data = train, method = "rf", tuneGrid = tune, 
+               ntree = 10, trControl = control)
+print(fitRf)
+```
+With ntree set at a small number (ntree = 10), tuning mtry has found that Accuracy and Kappa are both pretty close to one for all three 'mtry' values.
+
+####Out of Sample Error
+
+Testing our tuned Random Forest Model on the validation data set, 
+we show the confusion Matrix below and the accuracy is 0.9881729.
+```{r rf predict, eval = TRUE}
+predictRf <- predict(fitRf, valid)
+(confRf <- confusionMatrix(valid$classe, predictRf))
+(accuracyRf <- confRf$overall[1])
+```
+The accuracy of this random forest model is 0.99 using mtry = 12 and ntree = 10.
+
+#### Prediction on the Test Data
+
+Use the model we tuned above on the 20 test data, we get the our first set of preditions.
+```{r predict on test data, eval = TRUE}
+(predict(fitRf, preTest))
+```
+### Boosting 
+
+Boosting algorithms achieve good predictive models by traning a series of 
+weak classifiers and then linearly combine them into a final strong 
+classifier. In the caret package, the 'gbm' method is often used to build boosting models. Tuning parameters include 'n.trees' which is the number of boosting iterations, 'interaction.depth' is the number of splits on each tree, 'shrinkage' is considered as a learning rate, and 'n.minobsinnode' is the minimum number of observations in tree's terminal nodes. Here I choose shrinkage = 0.1, n.minobsinnode = 10 and tune the other two parameters (interaction.depth and n.trees) to find the best combination.
+Within the training data set, we use the caret train function with stochastic gradient boosting ('gbm') method and still use a resampling scheme of 3 separate 5-fold cross-validations. 
+
+```{r boosting, eval = TRUE, message = FALSE}
+gbmGrid <- expand.grid(
+                       interaction.depth = c(3,6),
+                       n.trees = c(50),
+                       shrinkage = c(0.1),
+                       n.minobsinnode = c(10))
+fitGbm <- train(classe ~ ., data = train, method="gbm",
+                tuneGrid = gbmGrid, trControl = control,
+                verbose = F)
+print(fitGbm)
+```
+This means that interaction.depth = 6 and n.trees = 50 is the best combination.
+
+#### Out of Sample Error
+
+To run it on the validation data set, we could find out the out of sample error rate.
+``` {r boosting predict, eval = TRUE}
+predictGbm <- predict(fitGbm, valid)
+(confGbm <- confusionMatrix(valid$classe, predictGbm))
+(accuracyGbm <- confGbm$overall[1])
+```
+The accuracy of the boosting model is 0.95 with interaction.depth = 6 and n.trees = 50.
+
+#### Predict on the Test Data
+
+Using the boosting model we just tuned, we get the second set of the prediction for the 20 test cases.
+```{r boosting predict test, eval = TRUE}
+predict(fitGbm,preTest)
+```
+
+###Conclusion
+
+Using random forest and boosting algorith from the caret package and tuned the key parameters to our data, we could see that the two models could both achieve high accuracy and their predictions on the test data set we got from random forest and boosting models are the same. This demonstrated the possibility of using wearable devices data to tell if a movement is performed in the correct way or not which could have important applications in developing smart devices in the real world.
