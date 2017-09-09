@@ -57,7 +57,7 @@ valid <- preTrain[-inTrain,]
 control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
 ```
 
-##Model Training and Tuning
+## Model Training and Tuning
 
 Since predicting 5 kinds of outcomes based on 46 measurements from accelerometers attached to 3 different parts of the body and the weight being lifted is a nonlinear problem, we are going to use Random Forest and Boosting algorithms. 
 
