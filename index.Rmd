@@ -72,10 +72,10 @@ print(fitRf)
 ```
 With ntree set at a small number (ntree = 10), tuning mtry has found that Accuracy and Kappa are both pretty close to one for all three 'mtry' values.
 
-####Out of Sample Error
+#### Out of Sample Error
 
 Testing our tuned Random Forest Model on the validation data set, 
-we show the confusion Matrix below and the accuracy is 0.9881729.
+we show the confusion matrix below and the accuracy is 0.9881729.
 ```{r rf predict, eval = TRUE}
 predictRf <- predict(fitRf, valid)
 (confRf <- confusionMatrix(valid$classe, predictRf))
@@ -91,8 +91,8 @@ Use the model we tuned above on the 20 test data, we get the our first set of pr
 ```
 ### Boosting 
 
-Boosting algorithms achieve good predictive models by traning a series of 
-weak classifiers and then linearly combine them into a final strong 
+Boosting algorithms achieve good predictive models by training a series of 
+weak classifiers and linearly combine them into a final strong 
 classifier. In the caret package, the 'gbm' method is often used to build boosting models. Tuning parameters include 'n.trees' which is the number of boosting iterations, 'interaction.depth' is the number of splits on each tree, 'shrinkage' is considered as a learning rate, and 'n.minobsinnode' is the minimum number of observations in tree's terminal nodes. Here I choose shrinkage = 0.1, n.minobsinnode = 10 and tune the other two parameters (interaction.depth and n.trees) to find the best combination.
 Within the training data set, we use the caret train function with stochastic gradient boosting ('gbm') method and still use a resampling scheme of 3 separate 5-fold cross-validations. 
 
